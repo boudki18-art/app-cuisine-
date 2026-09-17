@@ -747,10 +747,10 @@ function managerEditFormHtml(r){
       <div class="field full"><label>Raison</label><select name="reason">${REASONS.map(rs=>`<option value="${rs}" ${r.reason===rs?'selected':''}>${rs}</option>`).join('')}</select></div>
       <div class="field"><label>Nombre de repas</label><input type="number" name="meals" min="0" step="1" value="${r.mealsCount!=null?r.mealsCount:''}"></div>
       <div class="field"><label>Nombre de personnes</label><input type="number" name="people" min="0" step="1" value="${r.peopleCount!=null?r.peopleCount:''}"></div>
-      <div class="field full"><label>Nom (demandé par)</label><input type="text" name="requester" value="${escapeHtml(r.createdBy||'')}" required></div>
+      <div class="field"><label>Statut</label><select name="status">${STATUSES.map(s=>`<option value="${s}" ${r.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label>Demandé par</label><input type="text" name="requester" value="${escapeHtml(r.createdBy||'')}" required></div>
       <div class="field full"><label>Commentaire</label><textarea name="comment">${escapeHtml(r.comment||'')}</textarea></div>
     </div>
-    ${state.managerEditError ? `<div class="form-note" style="color:var(--red);">${escapeHtml(state.managerEditError)}</div>` : ''}
     <div class="form-actions">
       <button type="submit" class="btn-primary">Enregistrer</button>
       <button type="button" class="btn-ghost" id="cancelManagerEdit">Annuler</button>
@@ -762,6 +762,7 @@ function attachManagerEditFormEvents(){
   if(!form) return;
   form.addEventListener('submit', async (e)=>{
     e.preventDefault();
+    const id = form.dataset.editing;
     const fd = new FormData(form);
     const payload = {
       date: fd.get('date'),
@@ -771,113 +772,121 @@ function attachManagerEditFormEvents(){
       reason: fd.get('reason'),
       mealsCount: fd.get('meals') ? parseInt(fd.get('meals')) : null,
       peopleCount: fd.get('people') ? parseInt(fd.get('people')) : null,
+      status: fd.get('status'),
       createdBy: fd.get('requester').trim(),
       comment: fd.get('comment').trim(),
     };
     try{
-      await apiUpdateRequest(form.dataset.editing, payload);
+      await apiUpdateRequest(id, payload);
       state.requests = await apiGetRequests();
       state.apiOk = true;
-      state.managerEditError = '';
       state.managerEditingId = null;
       state.historyEditingId = null;
+      renderManagerTabBody();
     }catch(err){
-      state.managerEditError = err.message || 'Échec de l\'enregistrement.';
+      alert('Erreur lors de la modification : ' + err.message);
     }
-    renderManagerTabBody();
   });
-  document.getElementById('cancelManagerEdit').addEventListener('click',()=>{
+  const cancel = document.getElementById('cancelManagerEdit');
+  if(cancel) cancel.addEventListener('click', ()=>{
     state.managerEditingId = null;
     state.historyEditingId = null;
-    state.managerEditError = '';
     renderManagerTabBody();
   });
 }
 
-/* ---------- calendrier ---------- */
+/* ---------- CALENDAR TAB ---------- */
 function renderCalendarTab(body){
   body.innerHTML = `
-    <div class="quick-jumps" id="calQuickJumps">
-      <button data-jump="today">Aujourd'hui</button>
-      <button data-jump="thisweek">Cette semaine</button>
-      <button data-jump="nextweek">Semaine prochaine</button>
-      <button data-jump="thismonth">Ce mois</button>
-    </div>
-    <div class="cal-controls">
-      <button class="navbtn" id="calPrevMonth">‹</button>
-      <select id="calMonthSelect">${MONTHS.map((m,i)=>`<option value="${i}" ${i===state.calMonth?'selected':''}>${capitalize(m)}</option>`).join('')}</select>
-      <input type="number" id="calYearInput" value="${state.calYear}" style="width:90px;padding:6px 8px;border:1px solid var(--line);border-radius:2px;background:var(--white);font-size:13.5px;">
-      <button class="navbtn" id="calNextMonth">›</button>
-      <div class="jump">
-        <input type="date" id="calJumpDate" value="${state.calSelectedDate}">
-        <button class="today-btn" id="calJumpBtn">Aller</button>
+    <div class="cal-container">
+      <div class="cal-main">
+        <div class="cal-header">
+          <button class="navbtn" id="calPrev">‹</button>
+          <span class="current-date" id="calMonthYear"></span>
+          <button class="navbtn" id="calNext">›</button>
+          <button class="today-btn" id="calToday">Aujourd'hui</button>
+        </div>
+        <div class="cal-dow">${DOW.map(d=>`<div>${d}</div>`).join('')}</div>
+        <div class="cal-grid" id="calGrid"></div>
       </div>
+      <div class="cal-side" id="calDayPanel"></div>
     </div>
-    <div id="calGridWrap"></div>
-    <div class="cal-day-panel" id="calDayPanel"></div>
   `;
-  document.querySelectorAll('#calQuickJumps [data-jump]').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      const today = todayStr();
-      if(btn.dataset.jump==='today'){ jumpCalTo(today); }
-      if(btn.dataset.jump==='thisweek'){ jumpCalTo(today); }
-      if(btn.dataset.jump==='nextweek'){ jumpCalTo(addDays(today,7)); }
-      if(btn.dataset.jump==='thismonth'){ const d=new Date(); state.calYear=d.getFullYear(); state.calMonth=d.getMonth(); renderCalendarTab(body); }
-    });
-  });
-  document.getElementById('calPrevMonth').addEventListener('click',()=>{
-    state.calMonth--; if(state.calMonth<0){state.calMonth=11;state.calYear--;}
-    renderCalendarTab(body);
-  });
-  document.getElementById('calNextMonth').addEventListener('click',()=>{
-    state.calMonth++; if(state.calMonth>11){state.calMonth=0;state.calYear++;}
-    renderCalendarTab(body);
-  });
-  document.getElementById('calMonthSelect').addEventListener('change',(e)=>{ state.calMonth=parseInt(e.target.value); renderCalendarTab(body); });
-  document.getElementById('calYearInput').addEventListener('change',(e)=>{
-    const y = parseInt(e.target.value);
-    if(!isNaN(y) && y>0){ state.calYear=y; renderCalendarTab(body); }
-  });
-  document.getElementById('calJumpBtn').addEventListener('click',()=>{
-    const v = document.getElementById('calJumpDate').value;
-    if(v) jumpCalTo(v);
-  });
+  attachCalEvents();
   renderCalGrid();
   renderCalDayPanel();
 }
-function jumpCalTo(dateStr){
-  const [y,m] = dateStr.split('-').map(Number);
-  state.calYear = y; state.calMonth = m-1; state.calSelectedDate = dateStr;
-  renderCalendarTab(document.getElementById('managerTabBody'));
+function attachCalEvents(){
+  document.getElementById('calPrev').addEventListener('click', ()=>{
+    state.calMonth--;
+    if(state.calMonth < 0){ state.calMonth = 11; state.calYear--; }
+    renderCalGrid();
+  });
+  document.getElementById('calNext').addEventListener('click', ()=>{
+    state.calMonth++;
+    if(state.calMonth > 11){ state.calMonth = 0; state.calYear++; }
+    renderCalGrid();
+  });
+  document.getElementById('calToday').addEventListener('click', ()=>{
+    const now = new Date();
+    state.calYear = now.getFullYear();
+    state.calMonth = now.getMonth();
+    state.calSelectedDate = todayStr();
+    renderCalGrid();
+    renderCalDayPanel();
+  });
 }
 function renderCalGrid(){
-  const wrap = document.getElementById('calGridWrap');
-  if(!wrap) return;
-  const year = state.calYear, month = state.calMonth;
-  const firstDay = new Date(year, month, 1);
-  const startWeekday = (firstDay.getDay()+6)%7;
-  const daysInMonth = new Date(year, month+1, 0).getDate();
-  const today = todayStr();
-  const counts = {};
-  state.requests.forEach(r=>{ counts[r.date] = (counts[r.date]||0)+1; });
+  const title = document.getElementById('calMonthYear');
+  if(!title) return;
+  title.textContent = `${capitalize(MONTHS[state.calMonth])} ${state.calYear}`;
 
-  let html = `<div class="cal-grid">`;
-  DOW.forEach(d=>html+=`<div class="cal-dow">${d}</div>`);
-  for(let i=0;i<startWeekday;i++) html += `<div class="cal-cell empty"></div>`;
-  for(let day=1; day<=daysInMonth; day++){
-    const dateStr = `${year}-${pad(month+1)}-${pad(day)}`;
-    const isToday = dateStr===today;
-    const isSelected = dateStr===state.calSelectedDate;
-    const count = counts[dateStr]||0;
-    html += `<div class="cal-cell clickable ${isToday?'today':''} ${isSelected?'selected':''}" data-date="${dateStr}">
-      <div class="dnum">${day}</div>
-      ${count>0?`<div class="dot-count">${count}</div>`:''}
-    </div>`;
+  const grid = document.getElementById('calGrid');
+  const firstDay = new Date(state.calYear, state.calMonth, 1);
+  let startingDay = firstDay.getDay() - 1; 
+  if(startingDay < 0) startingDay = 6;
+
+  const totalDays = new Date(state.calYear, state.calMonth + 1, 0).getDate();
+  const prevMonthDays = new Date(state.calYear, state.calMonth, 0).getDate();
+
+  let html = '';
+  // Jours du mois précédent
+  for(let i = startingDay - 1; i >= 0; i--){
+    html += `<div class="cal-cell other-month">${prevMonthDays - i}</div>`;
   }
-  html += `</div>`;
-  wrap.innerHTML = html;
-  wrap.querySelectorAll('.cal-cell.clickable').forEach(cell=>{
-    cell.addEventListener('click',()=>{
+
+  // Jours du mois en cours
+  const today = todayStr();
+  for(let d = 1; d <= totalDays; d++){
+    const dateStr = `${state.calYear}-${pad(state.calMonth + 1)}-${pad(d)}`;
+    const dayReqs = state.requests.filter(r => r.date === dateStr);
+    const isToday = dateStr === today;
+    const isSelected = dateStr === state.calSelectedDate;
+
+    let badges = '';
+    if(dayReqs.length > 0){
+      badges = `<div class="cal-badge">${dayReqs.length} achat${dayReqs.length>1?'s':''}</div>`;
+    }
+
+    html += `
+      <div class="cal-cell ${isToday?'today':''} ${isSelected?'selected':''}" data-date="${dateStr}">
+        <span class="day-num">${d}</span>
+        ${badges}
+      </div>
+    `;
+  }
+
+  // Completer la grille à la fin si besoin
+  const totalCells = startingDay + totalDays;
+  const nextDays = (7 - (totalCells % 7)) % 7;
+  for(let i = 1; i <= nextDays; i++){
+    html += `<div class="cal-cell other-month">${i}</div>`;
+  }
+
+  grid.innerHTML = html;
+
+  grid.querySelectorAll('.cal-cell[data-date]').forEach(cell => {
+    cell.addEventListener('click', ()=>{
       state.calSelectedDate = cell.dataset.date;
       renderCalGrid();
       renderCalDayPanel();
@@ -887,32 +896,27 @@ function renderCalGrid(){
 function renderCalDayPanel(){
   const panel = document.getElementById('calDayPanel');
   if(!panel) return;
-  const list = sortedByDateAsc(state.requests.filter(r=>r.date===state.calSelectedDate));
+
+  const list = sortedByDateAsc(state.requests.filter(r => r.date === state.calSelectedDate));
   panel.innerHTML = `
-    <div class="section-head"><h2>${capitalize(formatLong(state.calSelectedDate))}</h2><span class="meta">${list.length} demande${list.length>1?'s':''}</span></div>
-    <div id="calDayListWrap"></div>
+    <div class="section-head" style="margin-top:0;">
+      <h2>${capitalize(formatLong(state.calSelectedDate))}</h2>
+    </div>
+    ${ledgerHtml(list, 'manager')}
   `;
-  const listWrap = document.getElementById('calDayListWrap');
-  if(state.managerEditingId && list.some(r=>r.id===state.managerEditingId)){
-    const req = state.requests.find(r=>r.id===state.managerEditingId);
-    listWrap.innerHTML = `<div class="inline-edit">${managerEditFormHtml(req)}</div>` + ledgerHtml(list,'manager');
-    attachManagerEditFormEvents();
-  } else {
-    listWrap.innerHTML = ledgerHtml(list,'manager');
-  }
-  attachLedgerEvents(listWrap,'manager');
+  attachLedgerEvents(panel, 'manager');
 }
 
-/* ---------- historique ---------- */
+/* ---------- HISTORY TAB ---------- */
 function renderHistoryTab(body){
   body.innerHTML = `
-    <div class="section-head"><h2>Historique des demandes</h2></div>
+    <div class="section-head"><h2>Historique complet</h2></div>
     ${filtersHtml('historyFilters', true)}
     <div id="historyListWrap"></div>
   `;
-  attachFilterEvents('historyFilters','historyListWrap','history');
-  renderFilteredList('historyFilters','historyListWrap','history');
+  attachFilterEvents('historyFilters', 'historyListWrap', 'history');
+  renderFilteredList('historyFilters', 'historyListWrap', 'history');
 }
 
-/* ================= INIT ================= */
-loadAll();
+/* ================= INITIALIZATION ================= */
+document.addEventListener('DOMContentLoaded', loadAll);
