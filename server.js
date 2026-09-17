@@ -1,5 +1,3 @@
-// server.js - point d'entrée du serveur.
-
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -13,15 +11,15 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// 1. Servir les fichiers statiques (index.html, styles.css, app.js, etc.)
+// Indiquer à Express où trouver les fichiers statiques (CSS, JS, images)
 app.use(express.static(__dirname));
 
-// 2. Définir les routes API
+// Routes API
 app.use('/api/requests', requestsRouter);
 app.use('/api/auth', authRouter);
 
-// 3. Renvoyer index.html pour toutes les requêtes de pages principales
-app.get('/', (req, res) => {
+// Rediriger toutes les autres pages vers index.html
+app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
