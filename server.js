@@ -5,7 +5,12 @@ const app = express();
 
 app.use(express.json());
 
-// C'est cette ligne magique qui permet à Express de servir index.html, styles.css et app.js tout seul
+// Servir les fichiers statiques (CSS, JS, images)
 app.use(express.static(path.join(__dirname)));
+
+// Route d'accueil explicite
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 module.exports = app;
