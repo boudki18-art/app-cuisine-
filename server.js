@@ -11,14 +11,14 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Indiquer à Express où trouver les fichiers statiques (CSS, JS, images)
-app.use(express.static(__dirname));
+// Servir tous les fichiers statiques du dossier courant
+app.use(express.static(path.join(__dirname)));
 
 // Routes API
 app.use('/api/requests', requestsRouter);
 app.use('/api/auth', authRouter);
 
-// Rediriger toutes les autres pages vers index.html
+// Rediriger toutes les autres requêtes vers index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
