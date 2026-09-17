@@ -1,8 +1,8 @@
-// routes/requests.js — endpoints CRUD pour les demandes d'achat.
+// requests.js — endpoints CRUD pour les demandes d'achat.
 
 const express = require('express');
 const { randomUUID } = require('crypto');
-const db = require('../db');
+const db = require('./db'); // Correction du chemin ici
 
 const router = express.Router();
 
@@ -24,8 +24,7 @@ function rowToApi(row) {
   };
 }
 
-// GET /api/requests — liste, avec filtres optionnels en query string :
-// dateFrom, dateTo, product, reason, status, year, search
+// GET /api/requests
 router.get('/', (req, res) => {
   const { dateFrom, dateTo, product, reason, status, year, search } = req.query;
   let sql = 'SELECT * FROM requests WHERE 1=1';
@@ -44,67 +43,85 @@ router.get('/', (req, res) => {
   }
 
   sql += ' ORDER BY date DESC, created_at DESC';
-  const rows = db.prepare(sql).all(...params);
-  res.json(rows.map(rowToApi));
+  
+  try {
+    const rows = db.prepare(sql).all(...params);
+    res.json(rows.map(rowToApi));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// POST /api/requests — création d'une nouvelle demande (statut "Demandé" imposé)
+// POST /api/requests
 router.post('/', (req, res) => {
   const { date, product, quantity, unit, reason, mealsCount, peopleCount, comment, createdBy } = req.body;
 
   if (!date || !product || quantity === undefined || quantity === null || !unit || !reason || !createdBy) {
-    return res.status(400).json({ error: 'Champs obligatoires manquants (date, produit, quantité, unité, raison, nom).' });
+    return res.status(400).json({ error: 'Champs obligatoires manquants.' });
   }
 
   const id = randomUUID();
   const now = new Date().toISOString();
 
-  db.prepare(`
-    INSERT INTO requests (id, date, product, quantity, unit, reason, meals_count, people_count, comment, status, created_by, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Demandé', ?, ?)
-  `).run(id, date, product, Number(quantity), unit, reason, mealsCount || null, peopleCount || null, comment || '', createdBy, now);
+  try {
+    db.prepare(`
+      INSERT INTO requests (id, date, product, quantity, unit, reason, meals_count, people_count, comment, status, created_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Demandé', ?, ?)
+    `).run(id, date, product, Number(quantity), unit, reason, mealsCount || null, peopleCount || null, comment || '', createdBy, now);
 
-  const row = db.prepare('SELECT * FROM requests WHERE id = ?').get(id);
-  res.status(201).json(rowToApi(row));
+    const row = db.prepare('SELECT * FROM requests WHERE id = ?').get(id);
+    res.status(201).json(rowToApi(row));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// PUT /api/requests/:id — modification (champs libres, y compris le statut)
+// PUT /api/requests/:id
 router.put('/:id', (req, res) => {
   const { id } = req.params;
-  const existing = db.prepare('SELECT * FROM requests WHERE id = ?').get(id);
-  if (!existing) return res.status(404).json({ error: 'Demande introuvable.' });
+  
+  try {
+    const existing = db.prepare('SELECT * FROM requests WHERE id = ?').get(id);
+    if (!existing) return res.status(404).json({ error: 'Demande introuvable.' });
 
-  const simpleFields = { date: 'date', product: 'product', unit: 'unit', reason: 'reason', comment: 'comment', status: 'status', createdBy: 'created_by' };
-  const updates = [];
-  const params = [];
+    const simpleFields = { date: 'date', product: 'product', unit: 'unit', reason: 'reason', comment: 'comment', status: 'status', createdBy: 'created_by' };
+    const updates = [];
+    const params = [];
 
-  Object.entries(simpleFields).forEach(([bodyKey, column]) => {
-    if (req.body[bodyKey] !== undefined) {
-      updates.push(`${column} = ?`);
-      params.push(req.body[bodyKey]);
-    }
-  });
-  if (req.body.quantity !== undefined) { updates.push('quantity = ?'); params.push(Number(req.body.quantity)); }
-  if (req.body.mealsCount !== undefined) { updates.push('meals_count = ?'); params.push(req.body.mealsCount || null); }
-  if (req.body.peopleCount !== undefined) { updates.push('people_count = ?'); params.push(req.body.peopleCount || null); }
+    Object.entries(simpleFields).forEach(([bodyKey, column]) => {
+      if (req.body[bodyKey] !== undefined) {
+        updates.push(`${column} = ?`);
+        params.push(req.body[bodyKey]);
+      }
+    });
+    if (req.body.quantity !== undefined) { updates.push('quantity = ?'); params.push(Number(req.body.quantity)); }
+    if (req.body.mealsCount !== undefined) { updates.push('meals_count = ?'); params.push(req.body.mealsCount || null); }
+    if (req.body.peopleCount !== undefined) { updates.push('people_count = ?'); params.push(req.body.peopleCount || null); }
 
-  if (updates.length === 0) return res.status(400).json({ error: 'Aucun champ à mettre à jour.' });
+    if (updates.length === 0) return res.status(400).json({ error: 'Aucun champ à mettre à jour.' });
 
-  updates.push('updated_at = ?');
-  params.push(new Date().toISOString());
-  params.push(id);
+    updates.push('updated_at = ?');
+    params.push(new Date().toISOString());
+    params.push(id);
 
-  db.prepare(`UPDATE requests SET ${updates.join(', ')} WHERE id = ?`).run(...params);
-  const row = db.prepare('SELECT * FROM requests WHERE id = ?').get(id);
-  res.json(rowToApi(row));
+    db.prepare(`UPDATE requests SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+    const row = db.prepare('SELECT * FROM requests WHERE id = ?').get(id);
+    res.json(rowToApi(row));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // DELETE /api/requests/:id
 router.delete('/:id', (req, res) => {
-  const existing = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.id);
-  if (!existing) return res.status(404).json({ error: 'Demande introuvable.' });
-  db.prepare('DELETE FROM requests WHERE id = ?').run(req.params.id);
-  res.status(204).end();
+  try {
+    const existing = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Demande introuvable.' });
+    db.prepare('DELETE FROM requests WHERE id = ?').run(req.params.id);
+    res.status(204).end();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;
