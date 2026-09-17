@@ -8,15 +8,15 @@
   ],
   "routes": [
     {
-      "src": "^/styles\\.css$",
+      "src": "/styles.css",
       "dest": "styles.css"
     },
     {
-      "src": "^/app\\.js$",
+      "src": "/app.js",
       "dest": "app.js"
     },
     {
-      "src": "^/api/(.*)",
+      "src": "/api/(.*)",
       "dest": "server.js"
     },
     {
