@@ -6,7 +6,6 @@ const UNITS = ['kg','g','litre','ml','bouteille','pièce','paquet','boîte','sac
 const REASONS = ['Repas clients / Riad','Repas staff','Stock','Petit-déjeuner','Déjeuner','Dîner','Événement','Autre'];
 const STATUSES = ['Demandé','Validé','Acheté','Reçu','Annulé'];
 const STATUS_CLASS = {'Demandé':'status-Demande','Validé':'status-Valide','Acheté':'status-Achete','Reçu':'status-Recu','Annulé':'status-Annule'};
-const DOW = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
 const MONTHS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 const POLL_INTERVAL_MS = 15000;
 
@@ -51,7 +50,7 @@ function formatLong(dateStr){
 }
 function capitalize(s){return s.charAt(0).toUpperCase()+s.slice(1);}
 function escapeHtml(s){
-  return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;n'}[c]));
 }
 function uniqueProducts(){
   const set=new Set();
@@ -84,11 +83,6 @@ async function apiLogin(password){
   const res = await fetch('/api/auth/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({password})});
   return res.json();
 }
-async function apiChangePassword(currentPassword, newPassword){
-  const res = await fetch('/api/auth/change-password', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({currentPassword,newPassword})});
-  const data = await res.json();
-  return {ok: res.ok && data.ok, error: data.error};
-}
 
 async function loadAll(){
   try{
@@ -114,32 +108,9 @@ function startPolling(){
       return;
     }
     if(state.role==='kitchen' && !state.kitchenEditingId) refreshKitchenList();
-    if(state.role==='manager'){
-      if(state.managerTab==='dashboard' && !state.managerEditingId){
-        renderTodayList();
-        renderFilteredList('managerFilters','filteredListWrap','manager');
-      }
-      if(state.managerTab==='history' && !state.historyEditingId){
-        renderFilteredList('historyFilters','historyListWrap','history');
-      }
-    }
   }, POLL_INTERVAL_MS);
 }
 
-function matchesFilters(r, f){
-  if(f.dateFrom && r.date < f.dateFrom) return false;
-  if(f.dateTo && r.date > f.dateTo) return false;
-  if(f.product && r.product !== f.product) return false;
-  if(f.reason && r.reason !== f.reason) return false;
-  if(f.status && r.status !== f.status) return false;
-  if(f.year && !r.date.startsWith(f.year)) return false;
-  if(f.search){
-    const s = f.search.toLowerCase();
-    const hay = (r.product+' '+(r.comment||'')+' '+(r.createdBy||'')).toLowerCase();
-    if(!hay.includes(s)) return false;
-  }
-  return true;
-}
 function sortedByDateDesc(arr){
   return [...arr].sort((a,b)=> a.date===b.date ? (b.createdAt||'').localeCompare(b.createdAt||'') : b.date.localeCompare(a.date));
 }
@@ -171,7 +142,6 @@ function renderRoot(){
   }
   app.innerHTML = managerScreenHtml();
   attachManagerTabEvents();
-  renderManagerTabBody();
 }
 
 function roleScreenHtml(){
@@ -263,7 +233,7 @@ function attachPasswordScreenEvents(){
   });
 }
 
-function topbarHtml(roleLabel, showChangePwd){
+function topbarHtml(roleLabel){
   return `
   <div class="topbar">
     <div class="brand-block">
@@ -271,7 +241,6 @@ function topbarHtml(roleLabel, showChangePwd){
       <div class="brand">Registre des achats <span class="who">— ${roleLabel}</span></div>
     </div>
     <div class="topbar-right">
-      ${showChangePwd ? `<button class="switch-role" id="changePwdBtn">Changer le mot de passe</button>` : ''}
       <button class="switch-role" id="switchRoleBtn">Changer d'espace</button>
     </div>
   </div>`;
@@ -279,11 +248,7 @@ function topbarHtml(roleLabel, showChangePwd){
 function attachTopbarEvents(){
   const b = document.getElementById('switchRoleBtn');
   if(b) b.addEventListener('click',()=>{
-    state.role=null; state.pendingRole=null; state.changingPassword=false; renderRoot();
-  });
-  const p = document.getElementById('changePwdBtn');
-  if(p) p.addEventListener('click',()=>{
-    state.changingPassword = true; state.changePasswordError = ''; renderRoot();
+    state.role=null; state.pendingRole=null; renderRoot();
   });
 }
 
@@ -388,7 +353,7 @@ function ledgerHtml(list, context){
         ${r.comment ? `<div class="comment">${escapeHtml(r.comment)}</div>` : ''}
       </div>
       <div class="side">
-        ${context==='manager' ? `<select class="status-select" data-action="setstatus" data-id="${r.id}">${STATUSES.map(s=>`<option value="${s}" ${r.status===s?'selected':''}>${s}</option>`).join('')}</select>` : `<span class="status-tag ${STATUS_CLASS[r.status]}">${r.status}</span>`}
+        <span class="status-tag ${STATUS_CLASS[r.status]}">${r.status}</span>
         <div class="row-actions">${canEdit ? `<button class="link-btn" data-action="edit" data-id="${r.id}">Modifier</button>` : ''}</div>
       </div>
     </div>`;
@@ -406,10 +371,9 @@ function attachLedgerEvents(container, context){
 }
 
 function managerScreenHtml(){
-  return `<div class="shell">${topbarHtml('Manager', true)}<div id="managerTabBody">Tableau de bord manager</div></div>`;
+  return `<div class="shell">${topbarHtml('Manager')}<div class="section-head"><h2>Espace Manager</h2></div><p>Connexion réussie. Bienvenue dans l'espace de gestion.</p></div>`;
 }
 function attachManagerTabEvents(){ attachTopbarEvents(); }
-function renderManagerTabBody(){}
 
 // Lancement de l'application
 loadAll();
