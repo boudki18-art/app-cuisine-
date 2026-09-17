@@ -5,10 +5,10 @@ const app = express();
 
 app.use(express.json());
 
-// Servir les fichiers statiques (CSS, JS, images)
-app.use(express.static(path.join(__dirname)));
+// Définir explicitement le dossier racine pour les fichiers statiques
+app.use(express.static(__dirname));
 
-// Route d'accueil explicite
+// Route explicite pour renvoyer index.html
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
