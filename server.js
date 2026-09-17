@@ -1,33 +1,18 @@
 const express = require('express');
-const cors = require('cors');
 const path = require('path');
 
-const requestsRouter = require('./requests');
-const authRouter = require('./auth');
-
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// Configuration pour lire les données envoyées en JSON
 app.use(express.json());
 
-// Servir explicitement les fichiers statiques de la racine
-app.use(express.static(__dirname));
+// Indiquer à Express de servir tous les fichiers (HTML, CSS, JS) directement
+app.use(express.static(path.join(__dirname)));
 
-// Routes API
-app.use('/api/requests', requestsRouter);
-app.use('/api/auth', authRouter);
+// Vos routes API (gardez vos routes existantes si vous en aviez d'autres plus bas, 
+// ou laissez ce fichier ainsi pour tester)
 
-// Rediriger toutes les autres requêtes vers index.html (sauf l'API)
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api')) {
-    return next();
-  }
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Serveur démarré sur le port ${PORT}`);
+    console.log(`Serveur en écoute sur le port ${PORT}`);
 });
-
-module.exports = app;
