@@ -8,7 +8,16 @@
   ],
   "routes": [
     {
-      "handle": "filesystem"
+      "src": "^/styles\\.css$",
+      "dest": "styles.css"
+    },
+    {
+      "src": "^/app\\.js$",
+      "dest": "app.js"
+    },
+    {
+      "src": "^/api/(.*)",
+      "dest": "server.js"
     },
     {
       "src": "/(.*)",
